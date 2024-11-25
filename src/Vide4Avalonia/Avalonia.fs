@@ -1,0 +1,2 @@
+namespace Vide4Avalonia
+
