@@ -4,10 +4,17 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Core.fs" />
-    <Compile Include="AvaloniaBridge.fs" />
+    <Compile Include="FSI.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.0.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.0.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="FSharp.Compiler.Interactive.Settings">
+      <HintPath>.\FsiRefOnlyDependencies\dotnetsdk-7.0.400\FSharp.Compiler.Interactive.Settings.dll</HintPath>
+    </Reference>
   </ItemGroup>
 </Project>
 
