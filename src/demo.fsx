@@ -109,9 +109,11 @@ let todoApp = vide {
                             { 
                                 a<TextBlock>(fun x -> x.Text <- "Remove")
                             }
-                        a<CheckBox>(fun x -> ()
-                            // .bind(item.isDone, fun value -> item.isDone <- value)
-                        )
+                        a<CheckBox>(fun x ->
+                            x.IsChecked <- item.isDone)
+                            .on(CheckBox.IsCheckedChangedEvent, fun x ->
+                                item.isDone <- Option.ofNullable x.IsChecked |> Option.defaultValue true
+                            )
                         a<TextBlock>(fun x ->
                             x.VerticalAlignment <- VA.Center
                             x.TextTrimming <- TextTrimming.CharacterEllipsis

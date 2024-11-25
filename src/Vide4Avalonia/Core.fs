@@ -1,27 +1,12 @@
 namespace Vide4Avalonia
 
+open System
+
 type Vide<'v,'s,'c> = Vide of ('s option -> 'c -> 'v * 's option)
 
 module Vide =
 
     let inline runVide (Vide v) = v
-
-    // Preserves the first value given and discards subsequent values.
-    let preserveValue<'v,'c> (x: 'v) =
-        Vide <| fun s (ctx: 'c) ->
-            let s = s |> Option.defaultValue x
-            s, Some s
-    
-    let preserveWith<'v,'c> (x: unit -> 'v) =
-        Vide <| fun s (ctx: 'c) ->
-            let s = s |> Option.defaultWith x
-            s, Some s
-    
-    // TODO: Think about which function is "global" and module-bound
-    let inline map ([<InlineIfLambda>] proj: 'v1 -> 'v2) (v: Vide<'v1,'s,'c>) : Vide<'v2,'s,'c> =
-        Vide <| fun s ctx ->
-            let v,s = (runVide v) s ctx
-            proj v, s
 
     // ----- zero:
     // why are there 2 'zero' functions? -> see comment in "VideBuilder.Zero"
@@ -67,14 +52,7 @@ module Vide =
                 | Some (x: System.Collections.Generic.IEnumerator<_>) ->
                     if x.MoveNext() then x else newEnum ()
             enumerator.Current, Some enumerator
-    
-    let ofSeqWithDefaultValue defaultValue (sequence: seq<_>) =
-        ofSeqWithDefault (fun () -> defaultValue) sequence
-    
-    let ofSeq (sequence: seq<_>) =
-        ofSeqWithDefault (fun () -> failwith "Empty sequences are not supported.") sequence
 
-    // TODO: ofList / ofArray
 
 module BuilderBricks =
     let inline bind<'v1,'s1,'v2,'s2,'c>
@@ -135,6 +113,17 @@ module Keywords =
     let elseForget<'s,'c> : Vide<unit,'s,'c> = 
         Vide <| fun s ctx -> (),None
 
+    // Preserves the first value given and discards subsequent values.
+    let preserveValue<'v,'c> (x: 'v) =
+        Vide <| fun s (ctx: 'c) ->
+            let s = s |> Option.defaultValue x
+            s, Some s
+    
+    let preserveWith<'v,'c> (x: unit -> 'v) =
+        Vide <| fun s (ctx: 'c) ->
+            let s = s |> Option.defaultWith x
+            s, Some s
+
 
 type HostContext<'ctx> = { host: IHost; ctx: 'ctx }
 
@@ -171,8 +160,6 @@ type DelayedMutableBuilder() =
     member _.Combine(a, b) = BuilderBricks.combine(a, b ())
     member _.Delay(f) = f
     member _.Run(f) = StateCtor f
-
-open System
 
 type OnEvalCallbackArgs<'v,'s> =
     { 
@@ -293,11 +280,7 @@ type NodeContext<'n when 'n: equality>
 
 type NodeBuilderState<'e,'s> = option<'e> * option<'s>
 
-type NodeModifierContext<'e> = 
-    { 
-        node: 'e
-        host: IHost
-    }
+type NodeModifierContext<'e> = { node: 'e; host: IHost }
 
 type NodeModifier<'n> = NodeModifierContext<'n> -> unit
 
@@ -322,10 +305,7 @@ type NodeBuilder<'e,'c>
 
 
 module NodeModelBuilderBricks =
-    let inline run<'v1,'v2,'s,'e,'n,'c
-            when 'n: equality
-            and 'c :> NodeContext<'n>
-        >
+    let inline run<'v1,'v2,'s,'e,'n,'c when 'n: equality and 'c :> NodeContext<'n>>
         (
             thisBuilder: NodeBuilder<'e,'c>,
             childVide: Vide<'v1, 's, HostContext<'c>>,
@@ -443,18 +423,12 @@ type RenderRetCnBaseBuilder<'e,'n,'c
 //     - standard yields
 // -------------------------------------------------------------------
 
-type ComponentRetCnBaseBuilder<'n,'c
-        when 'n : equality
-        and 'c :> NodeContext<'n>
-    > with
+type ComponentRetCnBaseBuilder<'n,'c when 'n : equality and 'c :> NodeContext<'n>> with
     member _.Yield(b: ComponentRetCnBaseBuilder<_,_>) = b {()}
     member _.Yield(b: RenderRetCnBaseBuilder<_,_,_>) = b {()}
     member _.Yield(v) = NodeModelBuilderBricks.yieldVide(v)
 
-type RenderRetCnBaseBuilder<'e,'n,'c
-        when 'n: equality
-        and 'c :> NodeContext<'n>
-    > with
+type RenderRetCnBaseBuilder<'e,'n,'c when 'n: equality and 'c :> NodeContext<'n>> with
     member _.Yield(b: ComponentRetCnBaseBuilder<_,_>) = b {()}
     member _.Yield(b: RenderRetCnBaseBuilder<_,_,_>) = b {()}
     member _.Yield(v) = NodeModelBuilderBricks.yieldVide(v)
@@ -464,65 +438,13 @@ type RenderRetCnBaseBuilder<'e,'n,'c
 // "Bind"s (every Content builder can bind every builder that returns values)
 // ----------------------------------------------------------------------------
 
-type RenderRetCnBaseBuilder<'e,'n,'c
-        when 'n: equality
-        and 'c :> NodeContext<'n>
-    > with
+type RenderRetCnBaseBuilder<'e,'n,'c when 'n: equality and 'c :> NodeContext<'n>> with
     member _.Bind(m: RenderRetCnBaseBuilder<_,_,_>, f) = BuilderBricks.bind(m {()}, f)
     member _.Bind(m: ComponentRetCnBaseBuilder<_,_>, f) = BuilderBricks.bind(m {()}, f)
 
-type ComponentRetCnBaseBuilder<'n,'c
-        when 'c :> NodeContext<'n> 
-        and 'n : equality
-    > with
+type ComponentRetCnBaseBuilder<'n,'c when 'c :> NodeContext<'n> and 'n : equality> with
     member _.Bind(m: RenderRetCnBaseBuilder<_,_,_>, f) = BuilderBricks.bind(m {()}, f)
     member _.Bind(m: ComponentRetCnBaseBuilder<_,_>, f) = BuilderBricks.bind(m {()}, f)
-
-[<Extension>]
-type NodeBuilderExtensions =
-    
-    /// Called once on initialization.
-    [<Extension>]
-    static member onInit(this: #NodeBuilder<_,_>, m: NodeModifier<_>) =
-        do this.InitModifiers.Add(m)
-        this
-    
-    /// Called on every Vide evaluatiopn cycle.
-    [<Extension>]
-    static member onEval(this: #NodeBuilder<_,_>, m: NodeModifier<_>) =
-        do this.PreEvalModifiers.Add(m)
-        this
-    
-    /// Called after every Vide evaluatiopn cycle.
-    [<Extension>]
-    static member onAfterEval(this: #NodeBuilder<_,_>, m: NodeModifier<_>) =
-        do this.PostEvalModifiers.Add(m)
-        this
-
-module Event =
-    type NodeEventArgs<'evt,'e> =
-        {
-            node: 'e
-            evt: 'evt
-            host: IHost
-            mutable requestEvaluation: bool
-        }
-
-    // TODO: InlineIfLambda
-    let inline handle
-        (node: 'e)
-        (host: IHost)
-        (callback: NodeEventArgs<'evt,'e> -> unit)
-        =
-        fun evt ->
-            let args = { node = node; evt = evt; host = host; requestEvaluation = true }
-            try
-                do host.SuspendEvaluation()
-                do callback args
-                if args.requestEvaluation then
-                    host.RequestEvaluation()
-            finally
-                do host.ResumeEvaluation()
 
 [<RequireQualifiedAccess>]
 module For =
@@ -628,7 +550,20 @@ type AvaloniaComponentBuilder<'e when 'e :> Control and 'e : (new: unit -> 'e)>(
     do match onEval with Some x -> this.PreEvalModifiers.Add(fun nmodctx -> x nmodctx.node) | None -> ()
 
     member this.on(evt: RoutedEvent<_>, callback) =
-        this.onInit(fun m -> m.node.AddHandler(evt, fun s o -> callback(m.node)))
+        this.InitModifiers.Add(fun m -> 
+            let host = m.host
+            m.node.AddHandler(evt, fun s o ->
+                try
+                    do host.SuspendEvaluation()
+                    do callback m.node
+                    // if args.requestEvaluation then
+                    //     host.RequestEvaluation()
+                    host.RequestEvaluation()
+                finally
+                    do host.ResumeEvaluation())
+        )
+
+        this
 
 /// Avalonia App
 module AvaloniaApp =
