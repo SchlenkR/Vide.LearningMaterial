@@ -1,7 +1,7 @@
 
-#r "nuget: Avalonia, 11.0.0"
-#r "nuget: Avalonia.Desktop, 11.0.0"
-#r "nuget: Avalonia.Themes.Fluent, 11.0.0"
+#r "nuget: Avalonia, 11.2.1"
+#r "nuget: Avalonia.Desktop, 11.2.1"
+#r "nuget: Avalonia.Themes.Fluent, 11.2.1"
 
 #I "Vide4Avalonia/bin/Debug/netstandard2.0/publish"
 #r "Vide4Avalonia.dll"
