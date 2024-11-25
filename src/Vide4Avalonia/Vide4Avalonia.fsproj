@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Core.fs" />
-    <Compile Include="Avalonia.fs" />
+    <Compile Include="AvaloniaBridge.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.0.0" />
