@@ -3,7 +3,7 @@
 #r "nuget: Avalonia.Desktop, 11.2.1"
 #r "nuget: Avalonia.Themes.Fluent, 11.2.1"
 
-#I "Vide4Avalonia/bin/Debug/netstandard2.0/publish"
+#I "../src/Vide4Avalonia/bin/Debug/netstandard2.0/publish"
 #r "Vide4Avalonia.dll"
 
 Vide4Avalonia.FSI.guardInit ()
@@ -27,21 +27,6 @@ open Avalonia.Controls
 
 type TodoList = { items: TodoItem list }
 and TodoItem = { text: string; mutable isDone: bool; key: int }
-
-
-let demoApp1 = vide {
-    a<StackPanel>() {
-        a<TextBlock>(fun x -> 
-            x.MaxLines <- 100
-            x.Text <- "Hello 1")
-        a<TextBlock>(fun x -> 
-            x.MaxLines <- 100
-            x.Text <- "Hello 2")
-        a<TextBlock>(fun x -> 
-            x.MaxLines <- 100
-            x.Text <- "Hello 3")
-    }
-}
 
 
 let todoApp = vide {
@@ -93,19 +78,21 @@ let todoApp = vide {
                 }
 
             a<TextBox>(fun x ->
-                itemName.Value <- x.Text)
+                x.Text <- itemName.Value)
+                .on(TextBox.TextChangedEvent, fun x -> itemName.Value <- x.Text)
         }
 
         a<StackPanel>(fun x ->
             x.Margin <- Thickness 4
-            x.Orientation <- Orientation.Vertical) 
+            x.Orientation <- Orientation.Vertical)
             {
                 for item in todoList.Value.items do
                     a<DockPanel>() {
                         a<Button>(fun x ->
                             x.IsEnabled <- item.isDone
                             x.AP DockPanel.DockProperty Dock.Right)
-                            .on(Button.ClickEvent, fun x -> setItems (todoList.Value.items |> List.except [item]))
+                            .on(Button.ClickEvent, fun x -> 
+                                setItems (todoList.Value.items |> List.except [item]))
                             { 
                                 a<TextBlock>(fun x -> x.Text <- "Remove")
                             }
