@@ -22,6 +22,7 @@ Vide4Avalonia.FSI.guardInit ()
 open Vide4Avalonia
 open Avalonia.Controls
 
+
 let counterComponent = vide {
     let! count = ofMutable { 0 }
 
@@ -29,18 +30,17 @@ let counterComponent = vide {
         x.Orientation <- Orientation.Horizontal
         x.Margin <- Thickness 5
         ) {
-        a<Button>(fun x -> 
-            x.Content <- "DEC")
-            .on(Button.ClickEvent, fun x -> count.Value <- count.Value - 1)
-        a<TextBlock>(fun x -> 
-            x.FontWeight <- FontWeight.Bold
-            x.Text <- count.Value.ToString()
-            x.Margin <- Thickness 5
-            x.VerticalAlignment <- VA.Center
-            )
-        a<Button>(fun x ->
-            x.Content <- "INC")
-            .on(Button.ClickEvent, fun x -> count.Value <- count.Value + 1)
+            a<Button>(fun x -> 
+                x.Content <- "DEC")
+                .on(Button.ClickEvent, fun x -> count.Value <- count.Value - 1)
+            a<TextBlock>(fun x -> 
+                x.FontWeight <- FontWeight.Bold
+                x.Text <- count.Value.ToString()
+                x.Margin <- Thickness 5
+                x.VerticalAlignment <- VA.Center)
+            a<Button>(fun x ->
+                x.Content <- "INC")
+                .on(Button.ClickEvent, fun x -> count.Value <- count.Value + 1)
     }
 }
 
@@ -49,11 +49,11 @@ let app = vide {
         x.VerticalAlignment <- VA.Center
         x.HorizontalAlignment <- HA.Center
         ) {
-        // the 1st counter
-        counterComponent
+            // the 1st counter
+            counterComponent
 
-        // the snd counter
-        counterComponent
+            // the snd counter
+            counterComponent
     }
 }
 
