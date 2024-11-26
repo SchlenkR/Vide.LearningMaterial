@@ -1,30 +1,10 @@
 namespace Vide4Avalonia
 
-open System
-
 type Vide<'v,'s,'c> = Vide of ('s option -> 'c -> 'v * 's option)
 
 module Vide =
 
     let inline runVide (Vide v) = v
-
-    // ----- zero:
-    // why are there 2 'zero' functions? -> see comment in "VideBuilder.Zero"
-    // ------------------
-
-    [<GeneralizableValue>]
-    let zeroFixedState<'c> : Vide<unit,unit,'c> =
-        Vide <| fun s ctx -> (),None
-
-    [<GeneralizableValue>]
-    let zeroAdaptiveState<'s,'c> : Vide<unit,'s,'c> =
-        Vide <| fun s ctx -> (),s
-
-    // ------------------
-
-    [<GeneralizableValue>]
-    let ctx<'c> : Vide<'c,unit,'c> =
-        Vide <| fun s ctx -> ctx,None
 
     let inline bind<'v1,'s1,'v2,'s2,'c>
         ([<InlineIfLambda>] f: 'v1 -> Vide<'v2,'s2,'c>)
@@ -41,29 +21,6 @@ module Vide =
             let fv,fs = f fs ctx
             fv, Some (ms,fs)
 
-    let inline ofSeqWithDefault ([<InlineIfLambda>] defaultFunc) (sequence: seq<_>) =
-        Vide <| fun s ctx ->
-            let enumerator =
-                let newEnum () =
-                    let x = sequence.GetEnumerator()
-                    if not (x.MoveNext()) then defaultFunc () else x
-                match s with
-                | None -> newEnum ()
-                | Some (x: System.Collections.Generic.IEnumerator<_>) ->
-                    if x.MoveNext() then x else newEnum ()
-            enumerator.Current, Some enumerator
-
-
-module BuilderBricks =
-    let inline bind<'v1,'s1,'v2,'s2,'c>
-        (
-            m: Vide<'v1,'s1,'c>,
-            [<InlineIfLambda>] f: 'v1 -> Vide<'v2,'s2,'c>
-        ) 
-        : Vide<'v2,'s1 option * 's2 option,'c>
-        =
-        Vide.bind f m
-
     let return'<'v,'c> (x: 'v) : Vide<'v,unit,'c> = 
         Vide <| fun s ctx -> x,None
 
@@ -73,16 +30,24 @@ module BuilderBricks =
     // -----------------------
     // Zero:
     // -----------------------
+    // Why are there 2 'zero' functions? -> see comment in "VideBuilder.Zero"?
+    // -----------------------
     // This zero (with "unit" as state) is required for multiple returns.
     // Another zero (with 's as state) is required for "if"s without an "else".
     // We cannot have both, which means: We cannot have "if"s without "else".
     // This is ok (and not unfortunate), because the developer has to make a
     // decision about what should happen: "elseForget" or "elsePreserve".
     // -----------------------
-    
-    let zeroFixedState<'c> () : Vide<unit,unit,'c> = Vide.zeroFixedState<'c>
 
-    let zeroAdaptiveState<'s,'c> () : Vide<unit,'s,'c> = Vide.zeroAdaptiveState<'s,'c>
+    [<GeneralizableValue>]
+    let zeroFixedState<'c> : Vide<unit,unit,'c> =
+        Vide <| fun s ctx -> (),None
+
+    [<GeneralizableValue>]
+    let zeroAdaptiveState<'s,'c> : Vide<unit,'s,'c> =
+        Vide <| fun s ctx -> (),s
+
+    // ------------------
 
     let inline delay<'v,'s,'c> ([<InlineIfLambda>] f: unit -> Vide<'v,'s,'c>) : Vide<'v,'s,'c> = f ()
 
@@ -98,9 +63,13 @@ module BuilderBricks =
                 match s with
                 | None -> None,None
                 | Some (ms,fs) -> ms,fs
-            let va,sa = (Vide.runVide a) sa ctx
-            let vb,sb = (Vide.runVide b) sb ctx
+            let va,sa = (runVide a) sa ctx
+            let vb,sb = (runVide b) sb ctx
             vb, Some (sa,sb)
+
+    [<GeneralizableValue>]
+    let ctx<'c> : Vide<'c,unit,'c> =
+        Vide <| fun s ctx -> ctx,None
 
 [<AutoOpen>]
 module Keywords =
@@ -124,6 +93,8 @@ module Keywords =
             let s = s |> Option.defaultWith x
             s, Some s
 
+
+open System
 
 type HostContext<'ctx> = { host: IHost; ctx: 'ctx }
 
@@ -156,8 +127,8 @@ type DelayedMutableBuilder() =
         Vide <| fun s (ctx: HostContext<_>) ->
             let s = s |> Option.defaultWith (fun () -> MutableValue(x, ctx.host))
             s, Some s
-    member _.Zero() = BuilderBricks.zeroAdaptiveState
-    member _.Combine(a, b) = BuilderBricks.combine(a, b ())
+    member _.Zero() = Vide.zeroAdaptiveState
+    member _.Combine(a, b) = Vide.combine(a, b ())
     member _.Delay(f) = f
     member _.Run(f) = StateCtor f
 
@@ -245,10 +216,10 @@ type NodeModelBaseBuilder() =
     member _.Bind(StateCtor m, f) =
         Vide <| fun s ctx ->
             let m = m ()
-            let bindRes = BuilderBricks.bind(m, f)
+            let bindRes = Vide.bind f m
             Vide.runVide bindRes s ctx
-    member _.Bind(m, f) = BuilderBricks.bind(m, f)
-    member _.Zero() = BuilderBricks.zeroFixedState()
+    member _.Bind(m, f) = Vide.bind f m
+    member _.Zero() = Vide.zeroFixedState
 
 [<Struct>]
 type KVP<'k,'v> = KVP of 'k * 'v
@@ -298,7 +269,7 @@ type NodeBuilder<'e,'c>
     member val PreEvalModifiers: ResizeArray<NodeModifier<'e>> = ResizeArray() with get
     member val PostEvalModifiers: ResizeArray<NodeModifier<'e>> = ResizeArray() with get
 
-    member _.Delay(f) = BuilderBricks.delay<_,_,HostContext<'c>>(f)
+    member _.Delay(f) = Vide.delay<_,_,HostContext<'c>>(f)
 
     member _.CreateContext = createContext
     member _.CreateThisElement = createThisElement
@@ -397,9 +368,9 @@ type ComponentRetCnBaseBuilder<'n,'c
         and 'c :> NodeContext<'n>
     > () =
     inherit NodeModelBaseBuilder()
-    member _.Return(x) = BuilderBricks.return'<_,HostContext<'c>>(x)
-    member inline _.Delay(f) = BuilderBricks.delay<_,_,HostContext<'c>>(f)
-    member inline _.Combine(a, b) = BuilderBricks.combine<_,_,_,_,HostContext<'c>>(a, b)
+    member _.Return(x) = Vide.return'<_,HostContext<'c>>(x)
+    member inline _.Delay(f) = Vide.delay<_,_,HostContext<'c>>(f)
+    member inline _.Combine(a, b) = Vide.combine<_,_,_,_,HostContext<'c>>(a, b)
     member inline _.For(seq, body) = NodeModelBuilderBricks.forWithKVP<_,_,_,_,HostContext<'c>>(seq, body)
     member inline _.For(seq, body) = NodeModelBuilderBricks.forWithKeyField<_,_,_,_,HostContext<'c>>(seq, body)
 
@@ -410,11 +381,11 @@ type RenderRetCnBaseBuilder<'e,'n,'c
     (createContext, createThisElement) 
     =
     inherit NodeBuilder<'e,'c>(createContext, createThisElement)
-    member inline _.Combine(a, b) = BuilderBricks.combine<_,_,_,_,HostContext<'c>>(a, b)
+    member inline _.Combine(a, b) = Vide.combine<_,_,_,_,HostContext<'c>>(a, b)
     member inline _.For(seq, body) = NodeModelBuilderBricks.forWithKVP<_,_,_,_,HostContext<'c>>(seq, body)
     member inline _.For(seq, body) = NodeModelBuilderBricks.forWithKeyField<_,_,_,_,HostContext<'c>>(seq, body)
     member inline this.Run(v) = NodeModelBuilderBricks.run(this, v, (fun n v -> v))
-    member _.Return(x) = BuilderBricks.return'(x)
+    member _.Return(x) = Vide.return'(x)
 
 
 // -------------------------------------------------------------------
@@ -439,12 +410,12 @@ type RenderRetCnBaseBuilder<'e,'n,'c when 'n: equality and 'c :> NodeContext<'n>
 // ----------------------------------------------------------------------------
 
 type RenderRetCnBaseBuilder<'e,'n,'c when 'n: equality and 'c :> NodeContext<'n>> with
-    member _.Bind(m: RenderRetCnBaseBuilder<_,_,_>, f) = BuilderBricks.bind(m {()}, f)
-    member _.Bind(m: ComponentRetCnBaseBuilder<_,_>, f) = BuilderBricks.bind(m {()}, f)
+    member _.Bind(m: RenderRetCnBaseBuilder<_,_,_>, f) = Vide.bind f (m {()})
+    member _.Bind(m: ComponentRetCnBaseBuilder<_,_>, f) = Vide.bind f (m {()})
 
 type ComponentRetCnBaseBuilder<'n,'c when 'c :> NodeContext<'n> and 'n : equality> with
-    member _.Bind(m: RenderRetCnBaseBuilder<_,_,_>, f) = BuilderBricks.bind(m {()}, f)
-    member _.Bind(m: ComponentRetCnBaseBuilder<_,_>, f) = BuilderBricks.bind(m {()}, f)
+    member _.Bind(m: RenderRetCnBaseBuilder<_,_,_>, f) = Vide.bind f (m {()})
+    member _.Bind(m: ComponentRetCnBaseBuilder<_,_>, f) = Vide.bind f (m {()})
 
 [<RequireQualifiedAccess>]
 module For =
